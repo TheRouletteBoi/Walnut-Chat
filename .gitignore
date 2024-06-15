@@ -9,6 +9,7 @@ bin-int/
 *.vcxproj.filters
 *.sln
 *.log
+*.DS_Store
 
 # Exclude
 !vendor/bin

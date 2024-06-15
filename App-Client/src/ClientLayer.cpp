@@ -3,12 +3,18 @@
 #include "ServerPacket.h"
 
 #include "Walnut/Application.h"
+
+#ifndef WL_HEADLESS
 #include "Walnut/UI/UI.h"
+#endif
+
 #include "Walnut/Serialization/BufferStream.h"
 #include "Walnut/Networking/NetworkingUtils.h"
 #include "Walnut/Utils/StringUtils.h"
 
+#ifndef WL_HEADLESS
 #include "misc/cpp/imgui_stdlib.h"
+#endif
 
 #include <yaml-cpp/yaml.h>
 
@@ -20,11 +26,20 @@ void ClientLayer::OnAttach()
 	m_ScratchBuffer.Allocate(1024);
 
 	m_Client = std::make_unique<Walnut::Client>();
-	m_Client->SetServerConnectedCallback([this]() { OnConnected(); });
-	m_Client->SetServerDisconnectedCallback([this]() { OnDisconnected(); });
-	m_Client->SetDataReceivedCallback([this](const Walnut::Buffer data) { OnDataReceived(data); });
 
-	m_Console.SetMessageSendCallback([this](std::string_view message) { SendChatMessage(message); });
+#ifdef WL_HEADLESS
+	TempConnectionSetup();
+#endif
+
+	m_Client->SetServerConnectedCallback([this]()
+										 { OnConnected(); });
+	m_Client->SetServerDisconnectedCallback([this]()
+											{ OnDisconnected(); });
+	m_Client->SetDataReceivedCallback([this](const Walnut::Buffer data)
+									  { OnDataReceived(data); });
+
+	m_Console.SetMessageSendCallback([this](std::string_view message)
+									 { SendChatMessage(message); });
 
 	LoadConnectionDetails(m_ConnectionDetailsFilePath);
 }
@@ -39,10 +54,45 @@ void ClientLayer::OnDetach()
 
 void ClientLayer::OnUIRender()
 {
+#ifndef WL_HEADLESS
 	UI_ConnectionModal();
-	
+
 	m_Console.OnUIRender();
 	UI_ClientList();
+#endif
+}
+
+bool runOnce = true;
+void ClientLayer::OnUpdate(float ts)
+{
+	if (m_Client->GetConnectionStatus() == Walnut::Client::ConnectionStatus::Connected)
+	{
+		if (runOnce)
+		{
+			// Send username
+			Walnut::BufferStreamWriter stream(m_ScratchBuffer);
+			stream.WriteRaw<PacketType>(PacketType::ClientConnectionRequest);
+			stream.WriteRaw<uint32_t>(m_Color); // Color
+			stream.WriteString(m_Username);		// Username
+
+			m_Client->SendBuffer(stream.GetBuffer());
+
+			SaveConnectionDetails(m_ConnectionDetailsFilePath);
+
+			runOnce = false;
+		}
+	}
+	else if (m_Client->GetConnectionStatus() == Walnut::Client::ConnectionStatus::FailedToConnect)
+	{
+		std::cout << "Connection failed." << std::endl;
+		const auto &debugMessage = m_Client->GetConnectionDebugMessage();
+		if (!debugMessage.empty())
+			std::cout << debugMessage.c_str() << std::endl;
+	}
+	else if (m_Client->GetConnectionStatus() == Walnut::Client::ConnectionStatus::Connecting)
+	{
+		std::cout << "Connecting..." << std::endl;
+	}
 }
 
 bool ClientLayer::IsConnected() const
@@ -57,6 +107,7 @@ void ClientLayer::OnDisconnectButton()
 
 void ClientLayer::UI_ConnectionModal()
 {
+#ifndef WL_HEADLESS
 	if (!m_ConnectionModalOpen && m_Client->GetConnectionStatus() != Walnut::Client::ConnectionStatus::Connected)
 	{
 		ImGui::OpenPopup("Connect to server");
@@ -95,7 +146,6 @@ void ClientLayer::UI_ConnectionModal()
 
 				m_Client->ConnectToServer(serverIP);
 			}
-
 		}
 
 		if (Walnut::UI::ButtonCentered("Quit"))
@@ -107,7 +157,7 @@ void ClientLayer::UI_ConnectionModal()
 			Walnut::BufferStreamWriter stream(m_ScratchBuffer);
 			stream.WriteRaw<PacketType>(PacketType::ClientConnectionRequest);
 			stream.WriteRaw<uint32_t>(m_Color); // Color
-			stream.WriteString(m_Username); // Username
+			stream.WriteString(m_Username);		// Username
 
 			m_Client->SendBuffer(stream.GetBuffer());
 
@@ -119,7 +169,7 @@ void ClientLayer::UI_ConnectionModal()
 		else if (m_Client->GetConnectionStatus() == Walnut::Client::ConnectionStatus::FailedToConnect)
 		{
 			ImGui::TextColored(ImVec4(0.9f, 0.2f, 0.1f, 1.0f), "Connection failed.");
-			const auto& debugMessage = m_Client->GetConnectionDebugMessage();
+			const auto &debugMessage = m_Client->GetConnectionDebugMessage();
 			if (!debugMessage.empty())
 				ImGui::TextColored(ImVec4(0.9f, 0.2f, 0.1f, 1.0f), debugMessage.c_str());
 		}
@@ -130,15 +180,17 @@ void ClientLayer::UI_ConnectionModal()
 
 		ImGui::EndPopup();
 	}
+#endif
 }
 
 void ClientLayer::UI_ClientList()
 {
+#ifndef WL_HEADLESS
 	ImGui::Begin("Users Online");
 	ImGui::Text("Online: %d", m_ConnectedClients.size());
 
 	static bool selected = false;
-	for (const auto& [username, clientInfo] : m_ConnectedClients)
+	for (const auto &[username, clientInfo] : m_ConnectedClients)
 	{
 		if (username.empty())
 			continue;
@@ -148,6 +200,32 @@ void ClientLayer::UI_ClientList()
 		ImGui::PopStyleColor();
 	}
 	ImGui::End();
+#endif
+}
+
+void ClientLayer::TempConnectionSetup()
+{
+	m_Username = "TheRouLetteBoi";
+	m_Color = 0xff0000ff;
+	m_ServerIP = "127.0.0.1:8192";
+
+	if (Walnut::Utils::IsValidIPAddress(m_ServerIP))
+	{
+		m_Client->ConnectToServer(m_ServerIP);
+	}
+	else
+	{
+		// Try resolve domain name
+		auto ipTokens = Walnut::Utils::SplitString(m_ServerIP, ':'); // [0] == hostname, [1] (optional) == port
+		std::string serverIP = Walnut::Utils::ResolveDomainName(ipTokens[0]);
+
+		if (ipTokens.size() != 2)
+			serverIP = fmt::format("{}:{}", serverIP, 8192); // Add default port if hostname doesn't contain port
+		else
+			serverIP = fmt::format("{}:{}", serverIP, ipTokens[1]); // Add specified port
+
+		m_Client->ConnectToServer(m_ServerIP);
+	}
 }
 
 void ClientLayer::OnConnected()
@@ -179,7 +257,7 @@ void ClientLayer::OnDataReceived(const Walnut::Buffer buffer)
 		// Find user
 		if (m_ConnectedClients.contains(fromUsername))
 		{
-			const auto& clientInfo = m_ConnectedClients.at(fromUsername);
+			const auto &clientInfo = m_ConnectedClients.at(fromUsername);
 			m_Console.AddTaggedMessageWithColor(clientInfo.Color, fromUsername, message);
 		}
 		else if (fromUsername == "SERVER") // special message from server
@@ -220,7 +298,7 @@ void ClientLayer::OnDataReceived(const Walnut::Buffer buffer)
 
 		// Update our client list
 		m_ConnectedClients.clear();
-		for (const auto& client : clientList)
+		for (const auto &client : clientList)
 			m_ConnectedClients[client.Username] = client;
 
 		break;
@@ -252,7 +330,7 @@ void ClientLayer::OnDataReceived(const Walnut::Buffer buffer)
 	{
 		std::vector<ChatMessage> messageHistory;
 		stream.ReadArray(messageHistory);
-		for (const auto& message : messageHistory)
+		for (const auto &message : messageHistory)
 		{
 			// find user color if connected
 			uint32_t userColor = 0xffffffff;
@@ -307,7 +385,7 @@ void ClientLayer::SendChatMessage(std::string_view message)
 	}
 }
 
-void ClientLayer::SaveConnectionDetails(const std::filesystem::path& filepath)
+void ClientLayer::SaveConnectionDetails(const std::filesystem::path &filepath)
 {
 	YAML::Emitter out;
 	{
@@ -327,7 +405,7 @@ void ClientLayer::SaveConnectionDetails(const std::filesystem::path& filepath)
 	fout << out.c_str();
 }
 
-bool ClientLayer::LoadConnectionDetails(const std::filesystem::path& filepath)
+bool ClientLayer::LoadConnectionDetails(const std::filesystem::path &filepath)
 {
 	if (!std::filesystem::exists(filepath))
 		return false;
@@ -339,7 +417,8 @@ bool ClientLayer::LoadConnectionDetails(const std::filesystem::path& filepath)
 	}
 	catch (YAML::ParserException e)
 	{
-		std::cout << "[ERROR] Failed to load message history " << filepath << std::endl << e.what() << std::endl;
+		std::cout << "[ERROR] Failed to load message history " << filepath << std::endl
+				  << e.what() << std::endl;
 		return false;
 	}
 
@@ -349,12 +428,14 @@ bool ClientLayer::LoadConnectionDetails(const std::filesystem::path& filepath)
 
 	m_Username = rootNode["Username"].as<std::string>();
 
+#ifndef WL_HEADLESS
 	m_Color = rootNode["Color"].as<uint32_t>();
 	ImVec4 color = ImColor(m_Color).Value;
 	m_ColorBuffer[0] = color.x;
 	m_ColorBuffer[1] = color.y;
 	m_ColorBuffer[2] = color.z;
 	m_ColorBuffer[3] = color.w;
+#endif
 
 	m_ServerIP = rootNode["ServerIP"].as<std::string>();
 

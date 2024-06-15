@@ -19,23 +19,27 @@ void ServerLayer::OnAttach()
 	m_ScratchBuffer.Allocate(8192); // 8KB for now? probably too small for things like the client list/chat history
 
 	m_Server = std::make_unique<Walnut::Server>(Port);
-	m_Server->SetClientConnectedCallback([this](const Walnut::ClientInfo& clientInfo) { OnClientConnected(clientInfo); });
-	m_Server->SetClientDisconnectedCallback([this](const Walnut::ClientInfo& clientInfo) { OnClientDisconnected(clientInfo); });
-	m_Server->SetDataReceivedCallback([this](const Walnut::ClientInfo& clientInfo, const Walnut::Buffer data) { OnDataReceived(clientInfo, data); });
+	m_Server->SetClientConnectedCallback([this](const Walnut::ClientInfo &clientInfo)
+										 { OnClientConnected(clientInfo); });
+	m_Server->SetClientDisconnectedCallback([this](const Walnut::ClientInfo &clientInfo)
+											{ OnClientDisconnected(clientInfo); });
+	m_Server->SetDataReceivedCallback([this](const Walnut::ClientInfo &clientInfo, const Walnut::Buffer data)
+									  { OnDataReceived(clientInfo, data); });
 	m_Server->Start();
 
 	m_MessageHistoryFilePath = "MessageHistory.yaml";
 
 	m_Console.AddTaggedMessage("Info", "Loading message history...");
 	LoadMessageHistoryFromFile(m_MessageHistoryFilePath);
-	for (const auto& message : m_MessageHistory)
+	for (const auto &message : m_MessageHistory)
 	{
 		m_Console.AddTaggedMessage(message.Username, message.Message);
 	}
 
 	m_Console.AddTaggedMessage("Info", "Started server on port {}", Port);
 
-	m_Console.SetMessageSendCallback([this](std::string_view message) { SendChatMessage(message); });
+	m_Console.SetMessageSendCallback([this](std::string_view message)
+									 { SendChatMessage(message); });
 }
 
 void ServerLayer::OnDetach()
@@ -67,7 +71,7 @@ void ServerLayer::OnUIRender()
 		ImGui::Text("Connected clients: %d", m_ConnectedClients.size());
 
 		static bool selected = false;
-		for (const auto& [id, name] : m_ConnectedClients)
+		for (const auto &[id, name] : m_ConnectedClients)
 		{
 			if (name.Username.empty())
 				continue;
@@ -76,7 +80,7 @@ void ServerLayer::OnUIRender()
 			if (ImGui::IsItemHovered())
 			{
 				// Get some more info about client from server
-				const auto& clientInfo = m_Server->GetConnectedClients().at(id);
+				const auto &clientInfo = m_Server->GetConnectedClients().at(id);
 
 				ImGui::BeginTooltip();
 				ImGui::SetTooltip(clientInfo.ConnectionDesc.c_str());
@@ -92,17 +96,17 @@ void ServerLayer::OnUIRender()
 #endif
 }
 
-void ServerLayer::OnClientConnected(const Walnut::ClientInfo& clientInfo)
+void ServerLayer::OnClientConnected(const Walnut::ClientInfo &clientInfo)
 {
 	// Client connection is handled in the PacketType::ClientConnectionRequest case
 }
 
-void ServerLayer::OnClientDisconnected(const Walnut::ClientInfo& clientInfo)
+void ServerLayer::OnClientDisconnected(const Walnut::ClientInfo &clientInfo)
 {
 	if (m_ConnectedClients.contains(clientInfo.ID))
 	{
 		SendClientDisconnect(clientInfo);
-		const auto& userInfo = m_ConnectedClients.at(clientInfo.ID);
+		const auto &userInfo = m_ConnectedClients.at(clientInfo.ID);
 		m_Console.AddItalicMessage("Client {} disconnected", userInfo.Username);
 		m_ConnectedClients.erase(clientInfo.ID);
 	}
@@ -113,7 +117,7 @@ void ServerLayer::OnClientDisconnected(const Walnut::ClientInfo& clientInfo)
 	}
 }
 
-void ServerLayer::OnDataReceived(const Walnut::ClientInfo& clientInfo, const Walnut::Buffer buffer)
+void ServerLayer::OnDataReceived(const Walnut::ClientInfo &clientInfo, const Walnut::Buffer buffer)
 {
 	Walnut::BufferStreamReader stream(buffer);
 
@@ -121,94 +125,88 @@ void ServerLayer::OnDataReceived(const Walnut::ClientInfo& clientInfo, const Wal
 	bool success = stream.ReadRaw<PacketType>(type);
 	WL_CORE_VERIFY(success);
 	if (!success) // Why couldn't we read packet type? Probs invalid packet
-		return; 
+		return;
 
 	switch (type)
 	{
-		case PacketType::Message:
+	case PacketType::Message:
+	{
+		if (!m_ConnectedClients.contains(clientInfo.ID))
 		{
-			if (!m_ConnectedClients.contains(clientInfo.ID))
-			{
-				// Reject message data from clients we don't recognize
-				m_Console.AddMessage("Rejected incoming data from client ID={}", clientInfo.ID);
-				m_Console.AddMessage("  ConnectionDesc={}", clientInfo.ConnectionDesc);
-				return;
-			}
-
-			std::string message;
-			if (stream.ReadString(message))
-			{
-				if (IsValidMessage(message)) // will trim to 4096 max chars if necessary (as defined in UserInfo.h)
-				{
-					// Send to other clients and record
-					WL_CORE_VERIFY(m_ConnectedClients.contains(clientInfo.ID));
-					const auto& client = m_ConnectedClients.at(clientInfo.ID);
-
-					m_MessageHistory.push_back({ client.Username, message });
-					m_Console.AddTaggedMessageWithColor(client.Color | 0xff000000, client.Username, message);
-					SendMessageToAllClients(clientInfo, message);
-				}
-			}
-			break;
-		}
-		case PacketType::ClientConnectionRequest:
-		{
-			uint32_t requestedColor;
-			std::string requestedUsername;
-			stream.ReadRaw<uint32_t>(requestedColor);
-			if (stream.ReadString(requestedUsername))
-			{
-				bool isValidUsername = IsValidUsername(requestedUsername);
-				SendClientConnectionRequestResponse(clientInfo, isValidUsername);
-				if (isValidUsername)
-				{
-					m_Console.AddMessage("Welcome {} (color {})", requestedUsername, requestedColor);
-					auto& client = m_ConnectedClients[clientInfo.ID];
-					client.Username = requestedUsername;
-					client.Color = requestedColor;
-					// connection complete? notify everyone else
-					SendClientConnect(clientInfo);
-
-					// Send the new client info about other connected clients
-					SendClientList(clientInfo);
-					
-					// Send message history to new client
-					SendMessageHistory(clientInfo);
-				}
-				else
-				{
-					m_Console.AddMessage("Client connection rejected with color {} and username {}", requestedColor, requestedUsername);
-					m_Console.AddMessage("Reason: invalid username");
-				}
-
-			}
-			break;
+			// Reject message data from clients we don't recognize
+			m_Console.AddMessage("Rejected incoming data from client ID={}", clientInfo.ID);
+			m_Console.AddMessage("  ConnectionDesc={}", clientInfo.ConnectionDesc);
+			return;
 		}
 
+		std::string message;
+		if (stream.ReadString(message))
+		{
+			if (IsValidMessage(message)) // will trim to 4096 max chars if necessary (as defined in UserInfo.h)
+			{
+				// Send to other clients and record
+				WL_CORE_VERIFY(m_ConnectedClients.contains(clientInfo.ID));
+				const auto &client = m_ConnectedClients.at(clientInfo.ID);
+
+				m_MessageHistory.push_back({client.Username, message});
+				m_Console.AddTaggedMessageWithColor(client.Color | 0xff000000, client.Username, message);
+				SendMessageToAllClients(clientInfo, message);
+			}
+		}
+		break;
 	}
+	case PacketType::ClientConnectionRequest:
+	{
+		uint32_t requestedColor;
+		std::string requestedUsername;
+		stream.ReadRaw<uint32_t>(requestedColor);
+		if (stream.ReadString(requestedUsername))
+		{
+			bool isValidUsername = IsValidUsername(requestedUsername);
+			SendClientConnectionRequestResponse(clientInfo, isValidUsername);
+			if (isValidUsername)
+			{
+				m_Console.AddMessage("Welcome {} (color {})", requestedUsername, requestedColor);
+				auto &client = m_ConnectedClients[clientInfo.ID];
+				client.Username = requestedUsername;
+				client.Color = requestedColor;
+				// connection complete? notify everyone else
+				SendClientConnect(clientInfo);
 
+				// Send the new client info about other connected clients
+				SendClientList(clientInfo);
+
+				// Send message history to new client
+				SendMessageHistory(clientInfo);
+			}
+			else
+			{
+				m_Console.AddMessage("Client connection rejected with color {} and username {}", requestedColor, requestedUsername);
+				m_Console.AddMessage("Reason: invalid username");
+			}
+		}
+		break;
+	}
+	}
 }
 
-void ServerLayer::OnMessageReceived(const Walnut::ClientInfo& clientInfo, std::string_view message)
+void ServerLayer::OnMessageReceived(const Walnut::ClientInfo &clientInfo, std::string_view message)
 {
-
 }
 
-void ServerLayer::OnClientConnectionRequest(const Walnut::ClientInfo& clientInfo, uint32_t userColor, std::string_view username)
+void ServerLayer::OnClientConnectionRequest(const Walnut::ClientInfo &clientInfo, uint32_t userColor, std::string_view username)
 {
-
 }
 
-void ServerLayer::OnClientUpdate(const Walnut::ClientInfo& clientInfo, uint32_t userColor, std::string_view username)
+void ServerLayer::OnClientUpdate(const Walnut::ClientInfo &clientInfo, uint32_t userColor, std::string_view username)
 {
-
 }
 
-void ServerLayer::SendClientList(const Walnut::ClientInfo& clientInfo)
+void ServerLayer::SendClientList(const Walnut::ClientInfo &clientInfo)
 {
 	std::vector<UserInfo> clientList(m_ConnectedClients.size());
 	uint32_t index = 0;
-	for (const auto& [clientID, clientInfo] : m_ConnectedClients)
+	for (const auto &[clientID, clientInfo] : m_ConnectedClients)
 		clientList[index++] = clientInfo;
 
 	Walnut::BufferStreamWriter stream(m_ScratchBuffer);
@@ -223,7 +221,7 @@ void ServerLayer::SendClientListToAllClients()
 {
 	std::vector<UserInfo> clientList(m_ConnectedClients.size());
 	uint32_t index = 0;
-	for (const auto& [clientID, clientInfo] : m_ConnectedClients)
+	for (const auto &[clientID, clientInfo] : m_ConnectedClients)
 		clientList[index++] = clientInfo;
 
 	Walnut::BufferStreamWriter stream(m_ScratchBuffer);
@@ -234,10 +232,10 @@ void ServerLayer::SendClientListToAllClients()
 	m_Server->SendBufferToAllClients(Walnut::Buffer(m_ScratchBuffer, stream.GetStreamPosition()));
 }
 
-void ServerLayer::SendClientConnect(const Walnut::ClientInfo& newClient)
+void ServerLayer::SendClientConnect(const Walnut::ClientInfo &newClient)
 {
 	WL_VERIFY(m_ConnectedClients.contains(newClient.ID));
-	const auto& newClientInfo = m_ConnectedClients.at(newClient.ID);
+	const auto &newClientInfo = m_ConnectedClients.at(newClient.ID);
 
 	Walnut::BufferStreamWriter stream(m_ScratchBuffer);
 	stream.WriteRaw<PacketType>(PacketType::ClientConnect);
@@ -246,9 +244,9 @@ void ServerLayer::SendClientConnect(const Walnut::ClientInfo& newClient)
 	m_Server->SendBufferToAllClients(Walnut::Buffer(m_ScratchBuffer, stream.GetStreamPosition()), newClient.ID);
 }
 
-void ServerLayer::SendClientDisconnect(const Walnut::ClientInfo& clientInfo)
+void ServerLayer::SendClientDisconnect(const Walnut::ClientInfo &clientInfo)
 {
-	const auto& userInfo = m_ConnectedClients.at(clientInfo.ID);
+	const auto &userInfo = m_ConnectedClients.at(clientInfo.ID);
 
 	Walnut::BufferStreamWriter stream(m_ScratchBuffer);
 	stream.WriteRaw<PacketType>(PacketType::ClientDisconnect);
@@ -257,7 +255,7 @@ void ServerLayer::SendClientDisconnect(const Walnut::ClientInfo& clientInfo)
 	m_Server->SendBufferToAllClients(Walnut::Buffer(m_ScratchBuffer, stream.GetStreamPosition()), clientInfo.ID);
 }
 
-void ServerLayer::SendClientConnectionRequestResponse(const Walnut::ClientInfo& clientInfo, bool response)
+void ServerLayer::SendClientConnectionRequestResponse(const Walnut::ClientInfo &clientInfo, bool response)
 {
 	Walnut::BufferStreamWriter stream(m_ScratchBuffer);
 	stream.WriteRaw<PacketType>(PacketType::ClientConnectionRequest);
@@ -266,12 +264,11 @@ void ServerLayer::SendClientConnectionRequestResponse(const Walnut::ClientInfo& 
 	m_Server->SendBufferToClient(clientInfo.ID, Walnut::Buffer(m_ScratchBuffer, stream.GetStreamPosition()));
 }
 
-void ServerLayer::SendClientUpdateResponse(const Walnut::ClientInfo& clientInfo)
+void ServerLayer::SendClientUpdateResponse(const Walnut::ClientInfo &clientInfo)
 {
-
 }
 
-void ServerLayer::SendMessageToAllClients(const Walnut::ClientInfo& fromClient, std::string_view message)
+void ServerLayer::SendMessageToAllClients(const Walnut::ClientInfo &fromClient, std::string_view message)
 {
 	Walnut::BufferStreamWriter stream(m_ScratchBuffer);
 	stream.WriteRaw<PacketType>(PacketType::Message);
@@ -281,7 +278,7 @@ void ServerLayer::SendMessageToAllClients(const Walnut::ClientInfo& fromClient, 
 	m_Server->SendBufferToAllClients(Walnut::Buffer(m_ScratchBuffer, stream.GetStreamPosition()), fromClient.ID);
 }
 
-void ServerLayer::SendMessageHistory(const Walnut::ClientInfo& clientInfo)
+void ServerLayer::SendMessageHistory(const Walnut::ClientInfo &clientInfo)
 {
 	Walnut::BufferStreamWriter stream(m_ScratchBuffer);
 	stream.WriteRaw<PacketType>(PacketType::MessageHistory);
@@ -298,7 +295,7 @@ void ServerLayer::SendServerShutdownToAllClients()
 	m_Server->SendBufferToAllClients(Walnut::Buffer(m_ScratchBuffer, stream.GetStreamPosition()));
 }
 
-void ServerLayer::SendClientKick(const Walnut::ClientInfo& clientInfo, std::string_view reason)
+void ServerLayer::SendClientKick(const Walnut::ClientInfo &clientInfo, std::string_view reason)
 {
 	Walnut::BufferStreamWriter stream(m_ScratchBuffer);
 	stream.WriteRaw<PacketType>(PacketType::ClientKick);
@@ -309,11 +306,11 @@ void ServerLayer::SendClientKick(const Walnut::ClientInfo& clientInfo, std::stri
 
 bool ServerLayer::KickUser(std::string_view username, std::string_view reason)
 {
-	for (const auto& [clientID, userInfo] : m_ConnectedClients)
+	for (const auto &[clientID, userInfo] : m_ConnectedClients)
 	{
 		if (userInfo.Username == username)
 		{
-			Walnut::ClientInfo clientInfo = { clientID, "" };
+			Walnut::ClientInfo clientInfo = {clientID, ""};
 			SendClientKick(clientInfo, reason);
 			m_Server->KickClient(clientID);
 			OnClientDisconnected(clientInfo);
@@ -331,9 +328,9 @@ void ServerLayer::Quit()
 	m_Server->Stop();
 }
 
-bool ServerLayer::IsValidUsername(const std::string& username) const
+bool ServerLayer::IsValidUsername(const std::string &username) const
 {
-	for (const auto& [id, client] : m_ConnectedClients)
+	for (const auto &[id, client] : m_ConnectedClients)
 	{
 		if (client.Username == username)
 			return false;
@@ -342,7 +339,7 @@ bool ServerLayer::IsValidUsername(const std::string& username) const
 	return true;
 }
 
-const std::string& ServerLayer::GetClientUsername(Walnut::ClientID clientID) const
+const std::string &ServerLayer::GetClientUsername(Walnut::ClientID clientID) const
 {
 	WL_VERIFY(m_ConnectedClients.contains(clientID));
 	return m_ConnectedClients.at(clientID).Username;
@@ -356,6 +353,9 @@ uint32_t ServerLayer::GetClientColor(Walnut::ClientID clientID) const
 
 void ServerLayer::SendChatMessage(std::string_view message)
 {
+	if (message.empty())
+		return;
+
 	if (message[0] == '/')
 	{
 		// Try to run command instead
@@ -371,7 +371,7 @@ void ServerLayer::SendChatMessage(std::string_view message)
 
 	// echo in own console and add to message history
 	m_Console.AddTaggedMessage("SERVER", message);
-	m_MessageHistory.push_back({ "SERVER", std::string(message) });
+	m_MessageHistory.push_back({"SERVER", std::string(message)});
 }
 
 void ServerLayer::OnCommand(std::string_view command)
@@ -405,7 +405,7 @@ void ServerLayer::OnCommand(std::string_view command)
 	}
 }
 
-void ServerLayer::SaveMessageHistoryToFile(const std::filesystem::path& filepath)
+void ServerLayer::SaveMessageHistoryToFile(const std::filesystem::path &filepath)
 {
 	YAML::Emitter out;
 	{
@@ -413,7 +413,7 @@ void ServerLayer::SaveMessageHistoryToFile(const std::filesystem::path& filepath
 		out << YAML::Key << "MessageHistory" << YAML::Value;
 
 		out << YAML::BeginSeq;
-		for (const auto& chatMessage : m_MessageHistory)
+		for (const auto &chatMessage : m_MessageHistory)
 		{
 			out << YAML::BeginMap;
 			out << YAML::Key << "User" << YAML::Value << chatMessage.Username;
@@ -426,10 +426,9 @@ void ServerLayer::SaveMessageHistoryToFile(const std::filesystem::path& filepath
 
 	std::ofstream fout(filepath);
 	fout << out.c_str();
-
 }
 
-bool ServerLayer::LoadMessageHistoryFromFile(const std::filesystem::path& filepath)
+bool ServerLayer::LoadMessageHistoryFromFile(const std::filesystem::path &filepath)
 {
 	if (!std::filesystem::exists(filepath))
 		return false;
@@ -443,7 +442,8 @@ bool ServerLayer::LoadMessageHistoryFromFile(const std::filesystem::path& filepa
 	}
 	catch (YAML::ParserException e)
 	{
-		std::cout << "[ERROR] Failed to load message history " << filepath << std::endl << e.what() << std::endl;
+		std::cout << "[ERROR] Failed to load message history " << filepath << std::endl
+				  << e.what() << std::endl;
 		return false;
 	}
 
@@ -452,7 +452,7 @@ bool ServerLayer::LoadMessageHistoryFromFile(const std::filesystem::path& filepa
 		return false;
 
 	m_MessageHistory.reserve(rootNode.size());
-	for (const auto& node : rootNode)
+	for (const auto &node : rootNode)
 		m_MessageHistory.emplace_back(ChatMessage(node["User"].as<std::string>(), node["Message"].as<std::string>()));
 
 	return true;

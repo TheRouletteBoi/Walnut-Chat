@@ -5,8 +5,7 @@ HeadlessConsole::HeadlessConsole(std::string_view title)
 {
 	// NOTE(Yan): to run in background on Linux server you'll need to comment out
 	//            the following line, since we can't std::getline with no terminal
-	m_InputThread = std::thread([this]()
-								{ InputThreadFunc(); });
+	m_InputThread = std::thread([this]() { InputThreadFunc(); });
 }
 
 HeadlessConsole::~HeadlessConsole()
@@ -21,7 +20,7 @@ void HeadlessConsole::ClearLog()
 	m_MessageHistory.clear();
 }
 
-void HeadlessConsole::SetMessageSendCallback(const MessageSendCallback &callback)
+void HeadlessConsole::SetMessageSendCallback(const MessageSendCallback& callback)
 {
 	m_MessageSendCallback = callback;
 }
@@ -35,4 +34,5 @@ void HeadlessConsole::InputThreadFunc()
 		std::getline(std::cin, line);
 		m_MessageSendCallback(line);
 	}
+
 }
