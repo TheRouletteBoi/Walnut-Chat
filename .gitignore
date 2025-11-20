@@ -10,6 +10,10 @@ bin-int/
 *.sln
 *.log
 .DS_Store
+App-Client/Makefile
+App-Common/Makefile
+App-Server/Makefile
+Makefile
 
 # Exclude
 !vendor/bin
