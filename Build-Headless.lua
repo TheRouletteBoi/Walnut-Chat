@@ -16,7 +16,10 @@ workspace "Walnut-Chat-Headless"
       buildoptions { "/EHsc", "/Zc:preprocessor", "/Zc:__cplusplus" }
     
    filter "system:linux"
-     architecture "x64"
+      architecture "x64"
+
+   filter "system:macosx"
+      architecture "ARM64"
 
 -- Directories
 outputdir = "%{cfg.buildcfg}-%{cfg.system}-%{cfg.architecture}"

@@ -1,7 +1,7 @@
 project "App-Client"
    kind "ConsoleApp"
    language "C++"
-   cppdialect "C++20"
+   cppdialect "C++23"
    targetdir "build/bin/%{cfg.buildcfg}"
    staticruntime "off"
 

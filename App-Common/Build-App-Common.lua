@@ -1,7 +1,7 @@
 project "App-Common"
    kind "StaticLib"
    language "C++"
-   cppdialect "C++20"
+   cppdialect "C++23"
    targetdir "build/bin/%{cfg.buildcfg}"
    staticruntime "off"
 

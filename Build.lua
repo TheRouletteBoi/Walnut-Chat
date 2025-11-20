@@ -1,7 +1,7 @@
 -- premake5.lua
 workspace "Walnut-Chat"
    location ("build/%{_ACTION}")
-   cppdialect "C++20"
+   cppdialect "C++23"
    configurations { "Debug", "Release", "Dist" }
    startproject "WalnutApp"
 
