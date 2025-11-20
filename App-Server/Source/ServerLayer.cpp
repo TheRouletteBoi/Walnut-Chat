@@ -356,22 +356,26 @@ uint32_t ServerLayer::GetClientColor(Walnut::ClientID clientID) const
 
 void ServerLayer::SendChatMessage(std::string_view message)
 {
-	if (message[0] == '/')
+	if (IsValidMessage(message))
 	{
-		// Try to run command instead
-		OnCommand(message);
-		return;
+		std::string messageToSend = TrimMessage(message);
+		if (message[0] == '/')
+		{
+			// Try to run command instead
+			OnCommand(message);
+			return;
+		}
+
+		Walnut::BufferStreamWriter stream(m_ScratchBuffer);
+		stream.WriteRaw<PacketType>(PacketType::Message);
+		stream.WriteString(std::string_view("SERVER")); // Username
+		stream.WriteString(message);
+		m_Server->SendBufferToAllClients(stream.GetBuffer());
+
+		// echo in own console and add to message history
+		m_Console.AddTaggedMessage("SERVER", message);
+		m_MessageHistory.push_back({ "SERVER", std::string(message) });
 	}
-
-	Walnut::BufferStreamWriter stream(m_ScratchBuffer);
-	stream.WriteRaw<PacketType>(PacketType::Message);
-	stream.WriteString(std::string_view("SERVER")); // Username
-	stream.WriteString(message);
-	m_Server->SendBufferToAllClients(stream.GetBuffer());
-
-	// echo in own console and add to message history
-	m_Console.AddTaggedMessage("SERVER", message);
-	m_MessageHistory.push_back({ "SERVER", std::string(message) });
 }
 
 void ServerLayer::OnCommand(std::string_view command)

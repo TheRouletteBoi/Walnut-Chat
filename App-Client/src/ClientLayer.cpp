@@ -294,9 +294,9 @@ void ClientLayer::OnDataReceived(const Walnut::Buffer buffer)
 
 void ClientLayer::SendChatMessage(std::string_view message)
 {
-	std::string messageToSend(message);
-	if (IsValidMessage(messageToSend))
+	if (IsValidMessage(message))
 	{
+		std::string messageToSend = TrimMessage(message);
 		Walnut::BufferStreamWriter stream(m_ScratchBuffer);
 		stream.WriteRaw<PacketType>(PacketType::Message);
 		stream.WriteString(messageToSend);

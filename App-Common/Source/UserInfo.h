@@ -45,4 +45,5 @@ struct ChatMessage
 };
 
 const int MaxMessageLength = 4096;
-bool IsValidMessage(std::string& message);
+bool IsValidMessage(std::string_view message);
+std::string TrimMessage(std::string_view message);

@@ -1,20 +1,25 @@
 #include "UserInfo.h"
 
-bool IsValidMessage(std::string& message)
+bool IsValidMessage(std::string_view message)
 {
-	if (message.empty())
-		return false;
+    if (message.empty())
+        return false;
 
 	// Only white-space
-	if (message.find_first_not_of(" \t\n\v\f\r") == std::string::npos)
-		return false;
+    if (message.find_first_not_of(" \t\n\v\f\r") == std::string::npos)
+        return false;
 
-	// Trim if exceeds max message length
-	if (message.size() > MaxMessageLength)
-	{
-		message = message.substr(0, MaxMessageLength);
-		return true;
-	}
+	// too long = invalid
+    if (message.size() > MaxMessageLength)
+        return false;
 
-	return true;
+    return true;
+}
+
+std::string TrimMessage(std::string_view message)
+{
+    if (message.size() > MaxMessageLength)
+        return std::string(message.substr(0, MaxMessageLength));
+
+    return std::string(message);
 }
