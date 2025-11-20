@@ -2,7 +2,7 @@ project "App-Common"
    kind "StaticLib"
    language "C++"
    cppdialect "C++20"
-   targetdir "bin/%{cfg.buildcfg}"
+   targetdir "build/bin/%{cfg.buildcfg}"
    staticruntime "off"
 
    files { "Source/**.h", "Source/**.cpp" }
@@ -28,8 +28,8 @@ project "App-Common"
        "Walnut-Networking",
    }
 
-   targetdir ("../bin/" .. outputdir .. "/%{prj.name}")
-   objdir ("../bin-int/" .. outputdir .. "/%{prj.name}")
+   targetdir ("../build/bin/" .. outputdir .. "/%{prj.name}")
+   objdir ("../build/bin-int/" .. outputdir .. "/%{prj.name}")
 
    filter "system:windows"
       systemversion "latest"

@@ -2,7 +2,7 @@ project "App-Client"
    kind "ConsoleApp"
    language "C++"
    cppdialect "C++20"
-   targetdir "bin/%{cfg.buildcfg}"
+   targetdir "build/bin/%{cfg.buildcfg}"
    staticruntime "off"
 
    files { "src/**.h", "src/**.cpp" }
@@ -43,8 +43,8 @@ project "App-Client"
 		"YAML_CPP_STATIC_DEFINE"
 	}
 
-   targetdir ("../bin/" .. outputdir .. "/%{prj.name}")
-   objdir ("../bin-int/" .. outputdir .. "/%{prj.name}")
+   targetdir ("../build/bin/" .. outputdir .. "/%{prj.name}")
+   objdir ("../build/bin-int/" .. outputdir .. "/%{prj.name}")
 
    filter "system:windows"
       systemversion "latest"
@@ -93,7 +93,7 @@ project "App-Client"
 
       postbuildcommands
       {
-         "{COPY} ../Walnut/Walnut-Modules/Walnut-Networking/vendor/GameNetworkingSockets/bin/Macos/libGameNetworkingSockets.dylib %{cfg.targetdir}",
-         "{COPY} ../Walnut/vendor/MoltenVK/libMoltenVK.dylib %{cfg.targetdir}/libvulkan.1.dylib"
+          "{COPY} ../../Walnut/Walnut-Modules/Walnut-Networking/vendor/GameNetworkingSockets/bin/Macos/libGameNetworkingSockets.dylib %{cfg.targetdir}",
+          "{COPY} ../../Walnut/vendor/MoltenVK/libMoltenVK.dylib %{cfg.targetdir}/libvulkan.1.dylib"
       }
    filter {}

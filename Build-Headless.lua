@@ -1,5 +1,6 @@
 -- premake5.lua
 workspace "Walnut-Chat-Headless"
+   location ("build/%{_ACTION}")
    configurations { "Debug", "Release", "Dist" }
    startproject "App-Server"
 
