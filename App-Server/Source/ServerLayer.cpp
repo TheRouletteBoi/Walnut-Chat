@@ -108,8 +108,8 @@ void ServerLayer::OnClientDisconnected(const Walnut::ClientInfo& clientInfo)
 	}
 	else
 	{
-		std::cout << "[ERROR] OnClientDisconnected - Could not find client with ID=" << clientInfo.ID << std::endl;
-		std::cout << "  ConnectionDesc=" << clientInfo.ConnectionDesc << std::endl;
+		std::println("[ERROR] OnClientDisconnected - Could not find client with ID={}", clientInfo.ID);
+		std::println("  ConnectionDesc  ={}", clientInfo.ConnectionDesc);
 	}
 }
 
@@ -447,7 +447,7 @@ bool ServerLayer::LoadMessageHistoryFromFile(const std::filesystem::path& filepa
 	}
 	catch (YAML::ParserException e)
 	{
-		std::cout << "[ERROR] Failed to load message history " << filepath << std::endl << e.what() << std::endl;
+		std::println("[ERROR] Failed to load message history {}\n{}", filepath.string(), e.what());
 		return false;
 	}
 

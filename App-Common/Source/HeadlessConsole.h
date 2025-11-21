@@ -5,6 +5,7 @@
 #include <string_view>
 #include <functional>
 #include <iostream>
+#include <print>
 
 #include "spdlog/spdlog.h"
 
@@ -25,7 +26,7 @@ public:
 	void AddMessage(std::string_view format, Args&&... args)
 	{
 		std::string messageString = fmt::vformat(format, fmt::make_format_args(args...));
-		std::cout << messageString << std::endl;
+		std::println("{}", messageString);
 		m_MessageHistory.push_back(messageString);
 	}
 
@@ -36,7 +37,7 @@ public:
 		MessageInfo info = messageString;
 		info.Italic = true;
 		m_MessageHistory.push_back(info);
-		std::cout << messageString << std::endl;
+		std::println("{}", messageString);
 	}
 
 	template<typename... Args>
@@ -44,7 +45,7 @@ public:
 	{
 		std::string messageString = fmt::vformat(format, fmt::make_format_args(args...));
 		m_MessageHistory.push_back(MessageInfo(std::string(tag), messageString));
-		std::cout << '[' << tag << "] " << messageString << std::endl;
+		std::println("[{}] {}", tag, messageString);
 	}
 
 	template<typename... Args>
@@ -52,7 +53,7 @@ public:
 	{
 		std::string messageString = fmt::vformat(format, fmt::make_format_args(args...));
 		m_MessageHistory.push_back(MessageInfo(messageString, color));
-		std::cout << messageString << std::endl;
+		std::println("{}", messageString);
 	}
 
 	template<typename... Args>
@@ -62,7 +63,7 @@ public:
 		MessageInfo info(messageString, color);
 		info.Italic = true;
 		m_MessageHistory.push_back(info);
-		std::cout << messageString << std::endl;
+		std::println("{}", messageString);
 	}
 
 	template<typename... Args>
@@ -70,7 +71,7 @@ public:
 	{
 		std::string messageString = fmt::vformat(format, fmt::make_format_args(args...));
 		m_MessageHistory.push_back(MessageInfo(std::string(tag), messageString, color));
-		std::cout << '[' << tag << "] " << messageString << std::endl;
+		std::println("[{}] {}", tag, messageString);
 	}
 
 	void OnUIRender() {}
