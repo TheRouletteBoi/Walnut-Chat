@@ -28,6 +28,7 @@ WalnutNetworkingBinDir = "Walnut/Walnut-Modules/Walnut-Networking/vendor/GameNet
 include "Walnut/Build-Walnut-Headless-External.lua"
 
 group "App"
+    include "App-Client/Build-App-Client-Headless.lua"
     include "App-Common/Build-App-Common-Headless.lua"
     include "App-Server/Build-App-Server-Headless.lua"
 group ""

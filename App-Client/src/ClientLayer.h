@@ -3,7 +3,11 @@
 #include "Walnut/Layer.h"
 #include "Walnut/Networking/Client.h"
 
+#ifdef WL_HEADLESS
+#include "HeadlessConsole.h"
+#else
 #include "Walnut/UI/Console.h"
+#endif
 
 #include "UserInfo.h"
 
@@ -15,14 +19,22 @@ class ClientLayer : public Walnut::Layer
 public:
 	virtual void OnAttach() override;
 	virtual void OnDetach() override;
+#ifdef WL_HEADLESS
+	virtual void OnUpdate(float ts) override;
+#else
 	virtual void OnUIRender() override;
+#endif
 
 	bool IsConnected() const;
 	void OnDisconnectButton();
 private:
+#ifdef WL_HEADLESS
+	void Headless_ConnectionModal();
+#else
 	// UI
 	void UI_ConnectionModal();
 	void UI_ClientList();
+#endif
 
 	// Server event callbacks
 	void OnConnected();
@@ -36,7 +48,13 @@ private:
 	bool LoadConnectionDetails(const std::filesystem::path& filepath);
 private:
 	std::unique_ptr<Walnut::Client> m_Client;
+	
+#ifdef WL_HEADLESS
+	HeadlessConsole m_Console;
+#else
 	Walnut::UI::Console m_Console{ "Chat" };
+#endif
+
 	std::string m_ServerIP;
 	std::filesystem::path m_ConnectionDetailsFilePath = "ConnectionDetails.yaml";
 
@@ -50,4 +68,9 @@ private:
 	std::map<std::string, UserInfo> m_ConnectedClients;
 	bool m_ConnectionModalOpen = false;
 	bool m_ShowSuccessfulConnectionMessage = false;
+
+#ifdef WL_HEADLESS
+	bool m_HeadlessPrompted = false;
+	bool m_HeadlessHasSentHandshake = false;
+#endif
 };

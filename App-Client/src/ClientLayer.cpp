@@ -3,12 +3,16 @@
 #include "ServerPacket.h"
 
 #include "Walnut/Application.h"
+#ifndef WL_HEADLESS
 #include "Walnut/UI/UI.h"
+#endif
 #include "Walnut/Serialization/BufferStream.h"
 #include "Walnut/Networking/NetworkingUtils.h"
 #include "Walnut/Utils/StringUtils.h"
 
+#ifndef WL_HEADLESS
 #include "misc/cpp/imgui_stdlib.h"
+#endif
 
 #include <yaml-cpp/yaml.h>
 
@@ -37,6 +41,12 @@ void ClientLayer::OnDetach()
 	m_ScratchBuffer.Release();
 }
 
+#ifdef WL_HEADLESS
+void ClientLayer::OnUpdate(float ts)
+{
+	Headless_ConnectionModal();
+}
+#else
 void ClientLayer::OnUIRender()
 {
 	UI_ConnectionModal();
@@ -44,6 +54,7 @@ void ClientLayer::OnUIRender()
 	m_Console.OnUIRender();
 	UI_ClientList();
 }
+#endif
 
 bool ClientLayer::IsConnected() const
 {
@@ -55,6 +66,7 @@ void ClientLayer::OnDisconnectButton()
 	m_Client->Disconnect();
 }
 
+#ifndef WL_HEADLESS
 void ClientLayer::UI_ConnectionModal()
 {
 	if (!m_ConnectionModalOpen && m_Client->GetConnectionStatus() != Walnut::Client::ConnectionStatus::Connected)
@@ -149,16 +161,115 @@ void ClientLayer::UI_ClientList()
 	}
 	ImGui::End();
 }
+#else
+void ClientLayer::Headless_ConnectionModal()
+{
+	// Headless: prompt once for username/server and connect.
+    // Handshake (ClientConnectionRequest) is sent once from OnConnected() when the connection is established.
+    if (!m_HeadlessPrompted)
+    {
+        if (m_Username.empty())
+            m_Username = "";
+        if (m_ServerIP.empty())
+            m_ServerIP = "127.0.0.1:8192";
+
+        auto promptRequired = [](std::string_view message, std::string& out) {
+            while (out.empty()) {
+				std::print("{}: ", message);
+                std::getline(std::cin, out);
+                if (out.empty())
+                    std::println("{}: ", "Input cannot be empty. Please try again.");
+            }
+        };
+        auto promptOptional = [](std::string_view message, std::string& target) {
+			std::print("{} [{}]: ", message, target);
+            std::string input;
+            if (std::getline(std::cin, input) && !input.empty())
+                target = input;
+        };
+
+        promptRequired("Enter username", m_Username);
+        promptOptional("Enter server address (host:port)", m_ServerIP);
+
+        // Initiate connect (handle IP vs hostname)
+        if (Walnut::Utils::IsValidIPAddress(m_ServerIP))
+        {
+            std::println("Connecting to {} ip", m_ServerIP);
+            m_Client->ConnectToServer(m_ServerIP);
+        }
+        else
+        {
+            constexpr std::string_view defaultPort = "8192";
+            const auto tokens = Walnut::Utils::SplitString(m_ServerIP, ':');
+            const std::string hostname = tokens.empty() ? m_ServerIP : tokens[0];
+            std::string_view port = (tokens.size() == 2) ? tokens[1] : defaultPort;
+
+            std::println("Resolving hostname '{}'...", hostname);
+            auto resolved = Walnut::Utils::ResolveDomainName(hostname);
+            if (resolved.empty())
+            {
+                std::println("Failed to resolve hostname '{}'", hostname);
+                // allow retry by leaving m_HeadlessPrompted == false (return early)
+                return;
+            }
+
+            const std::string fullAddress = resolved + ":" + std::string(port);
+            std::println("Resolved '{}' -> '{}' (port {})", hostname, resolved, port);
+            std::println("Connecting to {}", fullAddress);
+            m_Client->ConnectToServer(fullAddress);
+        }
+
+        m_HeadlessPrompted = true;
+    }
+
+    // Connection-state reporting. Handshake is not sent here to avoid race/duplicate sends.
+    const auto status = m_Client->GetConnectionStatus();
+    if (status == Walnut::Client::ConnectionStatus::Connecting)
+    {
+        std::println("Connecting...");
+    }
+    else if (status == Walnut::Client::ConnectionStatus::FailedToConnect)
+    {
+        std::println("Connection failed.");
+        const auto &debugMessage = m_Client->GetConnectionDebugMessage();
+        if (!debugMessage.empty())
+            std::println("{}", debugMessage);
+
+        // allow user to retry
+        m_HeadlessPrompted = false;
+        m_HeadlessHasSentHandshake = false;
+    }
+    else if (status == Walnut::Client::ConnectionStatus::Connected)
+    {
+		if (m_HeadlessPrompted && !m_HeadlessHasSentHandshake)
+		{
+			Walnut::BufferStreamWriter stream(m_ScratchBuffer);
+			stream.WriteRaw<PacketType>(PacketType::ClientConnectionRequest);
+			stream.WriteRaw<uint32_t>(m_Color); // Color
+			stream.WriteString(m_Username);     // Username
+
+			m_Client->SendBuffer(stream.GetBuffer());
+			SaveConnectionDetails(m_ConnectionDetailsFilePath);
+			m_HeadlessHasSentHandshake = true;
+		}
+    }
+}
+#endif
 
 void ClientLayer::OnConnected()
 {
-	m_Console.ClearLog();
-	// Welcome message sent in PacketType::ClientConnectionRequest response handling
+    m_Console.ClearLog();
 }
 
 void ClientLayer::OnDisconnected()
 {
-	m_Console.AddItalicMessageWithColor(0xff8a8a8a, "Lost connection to server!");
+    m_Console.AddItalicMessageWithColor(0xff8a8a8a, "Lost connection to server!");
+
+#ifdef WL_HEADLESS
+    // reset handshake/prompt state so headless can retry/prompt again
+    m_HeadlessHasSentHandshake = false;
+    m_HeadlessPrompted = false;
+#endif
 }
 
 void ClientLayer::OnDataReceived(const Walnut::Buffer buffer)
@@ -188,7 +299,7 @@ void ClientLayer::OnDataReceived(const Walnut::Buffer buffer)
 		}
 		else
 		{
-			std::cout << "[ERROR] Message from unknown user? This shouldn't happen..." << std::endl;
+			std::println("[ERROR] Message from unknown user? This shouldn't happen...");
 			// display message anyway
 			m_Console.AddTaggedMessage(fromUsername, message);
 		}
@@ -339,7 +450,7 @@ bool ClientLayer::LoadConnectionDetails(const std::filesystem::path& filepath)
 	}
 	catch (YAML::ParserException e)
 	{
-		std::cout << "[ERROR] Failed to load message history " << filepath << std::endl << e.what() << std::endl;
+		std::print("[ERROR] Failed to load message history {}\n {}\n", filepath.string(), e.what());
 		return false;
 	}
 
@@ -349,12 +460,14 @@ bool ClientLayer::LoadConnectionDetails(const std::filesystem::path& filepath)
 
 	m_Username = rootNode["Username"].as<std::string>();
 
+#ifndef WL_HEADLESS
 	m_Color = rootNode["Color"].as<uint32_t>();
 	ImVec4 color = ImColor(m_Color).Value;
 	m_ColorBuffer[0] = color.x;
 	m_ColorBuffer[1] = color.y;
 	m_ColorBuffer[2] = color.z;
 	m_ColorBuffer[3] = color.w;
+#endif
 
 	m_ServerIP = rootNode["ServerIP"].as<std::string>();
 

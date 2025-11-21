@@ -1,4 +1,8 @@
+#ifdef WL_HEADLESS
+#include "Walnut/Application.h"
+#else
 #include "Walnut/ApplicationGUI.h"
+#endif
 #include "Walnut/EntryPoint.h"
 
 #include "ClientLayer.h"
@@ -10,13 +14,16 @@ Walnut::Application* Walnut::CreateApplication(int argc, char** argv)
 {
 	Walnut::ApplicationSpecification spec;
 	spec.Name = "Walnut Chat Client 1.2";
+#ifndef WL_HEADLESS
 	spec.IconPath = "res/Walnut-Icon.png";
 	spec.CustomTitlebar = true;
 	spec.CenterWindow = true;
+#endif
 
 	Walnut::Application* app = new Walnut::Application(spec);
 	std::shared_ptr<ClientLayer> clientLayer = std::make_shared<ClientLayer>();
 	app->PushLayer(clientLayer);
+#ifndef WL_HEADLESS
 	app->SetMenubarCallback([app, clientLayer]()
 	{
 		if (ImGui::BeginMenu("File"))
@@ -29,5 +36,6 @@ Walnut::Application* Walnut::CreateApplication(int argc, char** argv)
 			ImGui::EndMenu();
 		}
 	});
+#endif
 	return app;
 }
