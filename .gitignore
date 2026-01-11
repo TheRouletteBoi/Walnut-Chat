@@ -1,8 +1,12 @@
 # Directories
 .vs/
+.idea/
 bin/
 bin-int/
 build/
+cmake-build-debug/
+cmake-build-release/
+cmake-build-headless/
 
 # Files
 *.vcxproj

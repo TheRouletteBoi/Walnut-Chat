@@ -14,3 +14,19 @@ Running `scripts/Setup.bat` will generate both `Walnut-Chat.sln` and `Walnut-Cha
 
 ### Linux (tested on Ubuntu 22)
 Run `scripts/Setup.sh` to generate make files for the headless server project. You can then call `make` in the root directory of the repository to build.
+
+### MacOS
+
+GUI Build (default)
+```bash 
+cmake -B cmake-build-debug -DCMAKE_BUILD_TYPE=Debug
+cmake --build cmake-build-debug
+```
+Outputs: App-Client, App-Server, Walnut, etc.
+
+Headless Build
+```bash
+cmake -B cmake-build-headless -DCMAKE_BUILD_TYPE=Debug -DWL_HEADLESS=ON
+cmake --build cmake-build-headless
+```
+Outputs: App-Client-Headless, App-Server-Headless, Walnut-Headless, etc.
