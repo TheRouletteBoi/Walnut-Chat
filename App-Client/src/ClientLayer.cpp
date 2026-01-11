@@ -50,7 +50,7 @@ void ClientLayer::OnUpdate(float ts)
 void ClientLayer::OnUIRender()
 {
 	UI_ConnectionModal();
-	
+
 	m_Console.OnUIRender();
 	UI_ClientList();
 }
